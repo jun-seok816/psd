@@ -1,0 +1,99 @@
+/* 레이아웃 그리드 : header(40px) +  main(1fr) */
+.psd-editor {
+  display: grid;
+  grid-template:
+    "header header  header" 40px
+    "toolbar canvas  layers" 1fr / /* column sizes */
+    56px 1fr 240px;
+  height: 100vh;
+  background: #1e1e1e;
+  color: #eaeaea;
+  overflow: hidden;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* ── Header ─────────────────────────────── */
+.psd-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background: #2d2d2d;
+  border-bottom: 1px solid #444;
+
+  .logo {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  button {
+    padding: 0.4rem 0.8rem;
+    border: none;
+    border-radius: 4px;
+    background: #0070f3;
+    color: #fff;
+    cursor: pointer;
+    &:hover {
+      background: darken(#0070f3, 7%);
+    }
+  }
+}
+
+/* ── Toolbar ────────────────────────────── */
+.psd-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #2b2b2b;
+  border-right: 1px solid #555;
+
+  button {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+    background: #3a3a3a;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background: #525252;
+    }
+  }
+}
+
+/* ── Canvas ─────────────────────────────── */
+.psd-canvas {
+  grid-area: canvas;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #333;
+  overflow: auto;
+
+  canvas {
+    box-shadow: 0 0 0 1px #555;
+    background: #fff;
+  }
+}
+
+/* ── Layers Panel ───────────────────────── */
+.psd-layers {
+  grid-area: layers;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.8rem;
+  background: #2b2b2b;
+  border-left: 1px solid #555;
+
+  h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    color: #bdbdbd;
+  }
+
+  /* 추가로 레이어 리스트 / 썸네일 스타일을 채워 주세요 */
+}
