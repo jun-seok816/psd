@@ -1,0 +1,69 @@
+.psd-wrapper {
+    padding: 2rem;
+  }
+  
+  .psd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  
+    h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+  }
+  
+  .psd-upload {
+    background: #0066ff;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+  
+    &:hover {
+      background: #0052cc;
+    }
+  }
+  
+  .psd-table {
+    width: 100%;
+    border-collapse: collapse;
+  
+    th,
+    td {
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+  
+    tbody tr {
+      cursor: pointer;
+  
+      &:hover {
+        background: #f9fafb;
+      }
+    }
+  
+    th {
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+    }
+  
+    .sz,
+    .type,
+    .date {
+      width: 7rem;
+      white-space: nowrap;
+      text-align: right;
+    }
+  }
+  
+  .psd-state {
+    text-align: center;
+    color: #6b7280;
+    padding: 2rem 0;
+  }
+  

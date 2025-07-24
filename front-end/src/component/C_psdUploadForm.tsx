@@ -1,9 +1,10 @@
 import React, { useRef, useState } from "react";
 import "./C_psdUploadForm.scss";
+import Psd from "@jsLib/class/psd/Main";
 
 const MAX_SIZE_MB = 500;
 
-export default function C_psdUploadForm() {
+export default function C_psdUploadForm(props: { lv_Obj: Psd }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 

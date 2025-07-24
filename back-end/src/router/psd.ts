@@ -4,7 +4,8 @@ import fs from "fs";
 import path from "path";
 import "ag-psd/initialize-canvas"; // ★ node-canvas 연결
 import { BezierKnot, BezierPath, Layer, readPsd } from "ag-psd";
-import type { Pool } from "mysql2/promise";
+import { OkPacket, Pool, RowDataPacket, PoolConnection } from "mysql2/promise";
+import { IPsdFile } from "@jsLib/all_Types";
 const router = Router();
 
 const storage = multer.diskStorage({
@@ -65,12 +66,24 @@ router.post(
         f.path,
       ]);
 
-      await conn.query(
+      const [psd_files] = await conn.query<OkPacket>(
         `INSERT INTO psd_files
            (req_id, original_name, stored_name, size_bytes, mime_type, path)
            VALUES ?`,
         [values]
       );
+
+      const [file_Row] = await conn.query<RowDataPacket[]>(
+        `SELECT * FROM psd_files WHERE id = ?`,
+        [psd_files.insertId]
+      );
+
+      const fileRow = file_Row as IPsdFile[];
+
+      await parsePsd({
+        fileRow: fileRow[0], 
+        conn:conn       
+      });
 
       await conn.commit();
       res.status(201).json({ reqId, uploaded: files.length });
@@ -85,86 +98,62 @@ router.post(
 );
 
 interface Options {
-  fileRow: { id: number; stored_name: string; path: string };
-  pool: Pool;
+  fileRow: IPsdFile;  
+  conn:PoolConnection
 }
 
-/** PSD → 각 레이어 PNG/SVG + DB INSERT */
-export async function parsePsd({ fileRow, pool }: Options) {
+export async function parsePsd({ fileRow , conn}: Options) {
+  /* 1) PSD 읽기 */
   const buf = await fs.promises.readFile(fileRow.path);
-  const psd = readPsd(buf); // 구조+픽셀 모두 읽기
+  const psd = readPsd(buf);
 
-  // 저장 폴더: /uploads/123_layers/
-  const layerDir = path.join(
+  const assetDir = path.join(
     path.dirname(fileRow.path),
-    `${fileRow.id}_layers`
+    `${fileRow.id}_assets`
   );
-  await fs.promises.mkdir(layerDir, { recursive: true });
+  await fs.promises.mkdir(assetDir, { recursive: true });
 
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
+  /* 2) 트리 순회 → PNG / SVG 추출 & JSON 변환 */
+  let autoIdx = 0;
+  function convert(layer: any): any {
+    const node: any = {
+      id: layer.id ?? ++autoIdx,
+      name: layer.name,
+      type: "bitmap",
+    };
 
-    // children 은 상단(0)이 최상위 레이어
-    for (let idx = 0; idx < (psd.children?.length ?? 0); idx++) {
-      const layer = psd.children![idx];
-      const safeName = layer.name?.replace(/[^\w.-]+/g, "_") || `layer_${idx}`;
-
-      /* ── 1) 비트맵 레이어 ───────────────────────── */
-      if (layer.canvas) {
-        const filename = `${idx}_${safeName}.png`;
-        const outPath = path.join(layerDir, filename);
-        // node-canvas toBuffer()
-        await fs.promises.writeFile(outPath, (layer.canvas as any).toBuffer());
-        await insertLayer(conn, {
-          file_id: fileRow.id,
-          idx,
-          name: layer.name,
-          type: "bitmap",
-          path: outPath,
-          text: null,
-        });
-        continue;
-      }
-
-      /* ── 2) 텍스트 레이어 ──────────────────────── */
-      if (layer.text) {
-        await insertLayer(conn, {
-          file_id: fileRow.id,
-          idx,
-          name: layer.name,
-          type: "text",
-          path: null,
-          text: layer.text.text, // 실제 문자열
-        });
-        continue;
-      }
-
-      /* ── 3) 벡터·Shape ────────────────────────── */
-      if (layer.vectorMask) {
-        const svgName = `${idx}_${safeName}.svg`;
-        const svgPath = path.join(layerDir, svgName);
-        // 벡터-마스크를 SVG path d 속성으로 변환하는 유틸은 별도 구현 필요
-        const svgMarkup = vectorMaskToSvg(layer); // TODO
-        await fs.promises.writeFile(svgPath, svgMarkup);
-        await insertLayer(conn, {
-          file_id: fileRow.id,
-          idx,
-          name: layer.name,
-          type: "vector",
-          path: svgPath,
-          text: null,
-        });
-      }
+    if (layer.children?.length) {
+      node.type = "group";
+      node.children = layer.children.map(convert);
+    } else if (layer.text) {
+      node.type = "text";
+      node.text = {
+        content: layer.text.text,
+        style: layer.text.style,
+      };
+    } else if (layer.vectorMask) {
+      node.type = "vector";
+      const svg = vectorMaskToSvg(layer);
+      const fname = `${node.id}.svg`;
+      fs.writeFileSync(path.join(assetDir, fname), svg);
+      node.path = fname;
+    } else if (layer.canvas) {
+      node.type = "bitmap";
+      const fname = `${node.id}.png`;
+      fs.writeFileSync(path.join(assetDir, fname), layer.canvas.toBuffer());
+      node.path = fname;
     }
 
-    await conn.commit();
-  } catch (e) {
-    await conn.rollback();
-    throw e;
-  } finally {
-    conn.release();
+    return node;
   }
+
+  /* 최상위 children 배열 변환 */
+  const layersJSON = await Promise.all(psd.children!.map(convert));
+
+  await conn.query("UPDATE psd_files SET layers_json = ? WHERE id = ?", [
+    JSON.stringify(layersJSON),
+    fileRow.id,
+  ]);
 }
 
 export function vectorMaskToSvg(
@@ -227,13 +216,27 @@ export function vectorMaskToSvg(
           </svg>`;
 }
 
-async function insertLayer(conn: any, row: Record<string, any>) {
-  await conn.query(
-    `INSERT INTO psd_layers
-       (file_id, idx, name, type, path, text)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [row.file_id, row.idx, row.name, row.type, row.path, row.text]
-  );
-}
+router.post("/get",async(req,res)=>{
+  try{
+    const [file_Row] = await process._myApp.db.promise().query<RowDataPacket[]>(
+      `SELECT * FROM psd_files`,      
+    );
+    res.send(file_Row);
+  }catch(err){
+    res.status(400).send({err:true})
+  }
+})
+
+router.post("/getById",async(req,res)=>{
+  try{
+    const [file_Row] = await process._myApp.db.promise().query<RowDataPacket[]>(
+      `SELECT * FROM psd_files WHERE id = ?`,[req.body.id]      
+    );
+
+    res.send(file_Row);
+  }catch(err){
+    res.status(400).send({err:true})
+  }
+})
 
 export default router;

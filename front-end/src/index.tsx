@@ -6,12 +6,14 @@ import { ToastContainer, toast } from "react-toastify";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "react-toastify/dist/ReactToastify.css";
 import "./index.scss";
+import C_psd from "./component/C_psd";
 import C_psdWork from "./component/C_psdWork";
 
 export default function Root() {
   return (
     <Routes>
-      <Route index element={<C_psdWork />}></Route>
+      <Route index element={<C_psd />}></Route>
+      <Route path="/PsdEditor" element={<C_psdWork />}></Route>
     </Routes>
   );
 }
